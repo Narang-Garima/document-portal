@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocumentPortal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">DOCUMENT<span>PORTAL</span></div>
+      <div class="brand-subtitle">Multi-format RAG document intelligence</div>
+    </div>
+    <div class="topbar-actions">
+      <button id="reset-index" class="secondary-button" type="button" title="Remove all indexed documents">↻ Refresh documents</button>
+      <button id="theme-toggle" class="secondary-button" type="button" aria-label="Toggle theme">☀ Light</button>
+      <span class="user-pill">{{ username or "Guest" }}</span>
+      <form method="post" action="/logout">
+        <button class="danger-button" type="submit">Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <nav class="nav-list" aria-label="Main navigation">
+        <button class="nav-item active" data-view="chat-view">◫ <span>Chat</span></button>
+        <button class="nav-item" data-view="compare-view">▤ <span>Compare Documents</span></button>
+        <button class="nav-item" data-view="multi-view">▦ <span>Multi-Document Chat</span></button>
+        <button class="nav-item" data-view="upload-view">⇧ <span>Upload Document</span></button>
+        <button class="nav-item" data-view="evaluation-view">✓ <span>Evaluation</span></button>
+        {% if role == "admin" %}<button class="nav-item" data-view="users-view">♙ <span>Manage Users</span></button>{% endif %}
+      </nav>
+      <div class="status-card">
+        <div><span>Vector DB</span><strong class="connected">● Connected</strong></div>
+        <div><span>Documents</span><strong id="document-count">0</strong></div>
+        <div><span>Chunks</span><strong id="chunk-count">0</strong></div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section id="chat-view" class="view active-view">
+        <div class="two-column-grid">
+          <article class="panel chat-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">KNOW YOUR DOCUMENT</p>
+                <h1>Chat with your document</h1>
+              </div>
+              <button id="new-chat-button" class="secondary-button" type="button">New chat</button>
+            </div>
+            <div id="chat-messages" class="chat-messages" aria-live="polite">
+              <div class="message assistant-message">
+                <div class="avatar">AI</div>
+                <div class="message-body">Upload and index a document, then ask anything about its content. Answers include the source chunks used.</div>
+              </div>
+            </div>
+            <div class="suggestion-row">
+              <button type="button" data-question="Summarize the indexed document.">Summarize</button>
+              <button type="button" data-question="What technologies are mentioned?">Technologies</button>
+              <button type="button" data-question="What are the key facts and metrics?">Key facts</button>
+            </div>
+            <form id="chat-form" class="composer">
+              <textarea id="chat-input" rows="3" maxlength="2000" placeholder="Ask something about your indexed documents..." required></textarea>
+              <button class="primary-button send-button" type="submit">Send</button>
+            </form>
+            <div class="action-row">
+              <button id="download-answer" class="secondary-button" type="button" disabled>Download answer</button>
+              <button id="clear-chat" class="secondary-button" type="button">Clear chat</button>
+            </div>
+          </article>
+
+          <article class="panel upload-panel compact-upload">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">INDEX CONTENT</p>
+                <h2>Upload a document</h2>
+              </div>
+            </div>
+            <form id="upload-form">
+              <label class="dropzone" id="single-dropzone">
+                <input id="file-input" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx" hidden>
+                <span class="drop-icon">⇧</span>
+                <strong>Drop a file here or browse</strong>
+                <span>.pdf · .docx · .txt · .md · .csv · .json · .xlsx</span>
+              </label>
+              <label class="check-row"><input id="caption-checkbox" type="checkbox"> Caption images <em>uses API credits</em></label>
+              <button class="primary-button full-width" type="submit">Upload and index</button>
+            </form>
+            <div id="upload-status" class="notice hidden"></div>
+            <div id="upload-result" class="result-card hidden"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="compare-view" class="view">
+        <article class="panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">SIDE-BY-SIDE ANALYSIS</p><h1>Compare two documents</h1></div>
+          </div>
+          <form id="compare-form">
+            <div class="compare-upload-grid">
+              <label class="dropzone small-dropzone">
+                <input id="left-file" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx" hidden required>
+                <span class="drop-icon">1</span><strong>Choose document one</strong><span id="left-file-name">No file selected</span>
+              </label>
+              <label class="dropzone small-dropzone">
+                <input id="right-file" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx" hidden required>
+                <span class="drop-icon">2</span><strong>Choose document two</strong><span id="right-file-name">No file selected</span>
+              </label>
+            </div>
+            <button class="primary-button" type="submit">Compare documents</button>
+          </form>
+          <div id="compare-status" class="notice hidden"></div>
+          <div id="compare-result" class="comparison-result hidden"></div>
+        </article>
+      </section>
+
+      <section id="multi-view" class="view">
+        <div class="two-column-grid">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">SHARED KNOWLEDGE BASE</p><h1>Upload multiple documents</h1></div></div>
+            <form id="multi-upload-form">
+              <label class="dropzone">
+                <input id="multi-file-input" type="file" multiple accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx" hidden>
+                <span class="drop-icon">▦</span><strong>Select several documents</strong><span id="multi-file-label">No files selected</span>
+              </label>
+              <button class="primary-button full-width" type="submit">Upload all and index</button>
+            </form>
+            <div id="multi-upload-status" class="notice hidden"></div>
+            <div id="multi-upload-result" class="result-card hidden"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">CROSS-DOCUMENT Q&amp;A</p><h2>Chat across all indexed files</h2></div></div>
+            <form id="multi-chat-form" class="composer tall-composer">
+              <textarea id="multi-chat-input" rows="8" maxlength="2000" placeholder="Ask a question that may require information from multiple documents..." required></textarea>
+              <button class="primary-button" type="submit">Ask all documents</button>
+            </form>
+            <div id="multi-messages" class="chat-messages compact-chat" aria-live="polite"><div class="message assistant-message"><div class="avatar">AI</div><div class="message-body">Upload several documents, then ask a question that combines information across them.</div></div></div>
+            <div class="action-row"><button id="download-multi-answer" class="secondary-button" type="button" disabled>Download answer</button><button id="clear-multi-chat" class="secondary-button" type="button">Clear chat</button></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="upload-view" class="view">
+        <article class="panel wide-panel">
+          <div class="panel-heading"><div><p class="eyebrow">INGESTION PIPELINE</p><h1>Upload and inspect</h1></div></div>
+          <p class="muted">Use the upload panel on the Chat tab to index a document. This page explains the supported pipeline.</p>
+          <div class="feature-grid">
+            <div class="feature-card"><strong>Formats</strong><span>PDF, DOCX, TXT, MD, CSV, JSON, XLSX</span></div>
+            <div class="feature-card"><strong>Extraction</strong><span>Text, tables, metadata, and optional image captions</span></div>
+            <div class="feature-card"><strong>Retrieval</strong><span>Chroma vector search combined with BM25 hybrid search</span></div>
+            <div class="feature-card"><strong>Generation</strong><span>Grounded answers with source chunks and LangChain caching</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="evaluation-view" class="view">
+        <article class="panel wide-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">QUALITY GATE</p><h1>DeepEval evaluation matrix</h1></div>
+            <button id="refresh-eval" class="secondary-button" type="button">Refresh</button>
+          </div>
+          <p class="muted">The project uses DeepEval—not RAGAS—for automated RAG quality tests. The paid suite is opt-in and includes at least ten questions across relevancy, faithfulness, and contextual relevancy.</p>
+          <div class="metric-grid">
+            <div class="metric-card"><span>Answer relevancy</span><strong>≥ 0.60</strong></div>
+            <div class="metric-card"><span>Faithfulness</span><strong>≥ 0.70</strong></div>
+            <div class="metric-card"><span>Context relevancy</span><strong>≥ 0.60</strong></div>
+            <div class="metric-card"><span>Cases</span><strong id="eval-case-count">10</strong></div>
+          </div>
+          <div class="code-card"><code>$env:RUN_RAG_EVALS="1"; python -m pytest evals/test_rag_deepeval.py -v</code></div>
+          <div id="evaluation-cases" class="evaluation-table"></div>
+        </article>
+      </section>
+
+      {% if role == "admin" %}
+      <section id="users-view" class="view">
+        <article class="panel wide-panel">
+          <div class="panel-heading"><div><p class="eyebrow">ACCESS CONTROL</p><h1>Manage portal users</h1></div><button id="refresh-users" class="secondary-button" type="button">Refresh</button></div>
+          <p class="muted">Add approved email addresses here. Users receive a one-time code and no password is stored.</p>
+          <form id="add-user-form" class="inline-form">
+            <input id="new-user-email" name="email" type="email" placeholder="user@example.com" required>
+            <select id="new-user-role" name="role"><option value="user">User</option><option value="admin">Admin</option></select>
+            <button class="primary-button" type="submit">Add user</button>
+          </form>
+          <div id="user-status" class="notice hidden"></div>
+          <div id="users-table" class="evaluation-table user-table"></div>
+        </article>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+
+  <footer class="footer">DocumentPortal · FastAPI · LangChain · ChromaDB · Google Gemini</footer>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

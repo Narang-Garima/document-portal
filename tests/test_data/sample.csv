@@ -1,0 +1,15 @@
+Category,Item,Details
+Tech Stack,Stack,LangGraph; FastAPI; AWS EKS; Groq; RAGAS; Kubernetes; MCP
+Metrics,Context Precision,0.85 Context Precision (RAGAS evaluation)
+Metrics,Response Time,40% faster response times through optimization
+Metrics,Uptime,99% uptime with zero-downtime deployments
+Metrics,Cost Reduction,10× cost reduction using Groq vs GPT-4
+Pitch,30-Second Pitch,"Agentic RAG assistant for e-commerce using LangGraph, RAGAS, Groq, and Kubernetes."
+Pitch,1-Minute Pitch,Problem → Architecture → Key decision → Result
+Deep Dive,Why LangGraph,"State control, routing, cycles"
+Deep Dive,Retrieval Design,"Vector store, chunking, embeddings, reranking"
+Deep Dive,RAGAS Evaluation,"Context precision, faithfulness, answer relevancy"
+Deep Dive,Groq vs GPT-4,"Latency, cost, quality tradeoffs"
+Deep Dive,Kubernetes/EKS,"Rolling updates, probes, scaling"
+Deep Dive,MCP Usage,Tool/data source integration
+Deep Dive,Bug Story,"Failure, diagnosis, fix"

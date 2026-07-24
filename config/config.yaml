@@ -1,0 +1,54 @@
+# config.yaml
+# Central place for anything that might change between environments
+# (dev/prod) or need tuning without touching code.
+
+app:
+  name: "Document Portal"
+  version: "0.1.0"
+
+llm:
+  provider: "google"             # "anthropic" | "openai" | "google"
+  temperature: 0.2
+  anthropic_model: "claude-sonnet-4-6"
+  openai_model: "gpt-4o-mini"
+  google_model: "gemini-flash-latest"
+
+embedding:
+  provider: "huggingface"        # "huggingface" | "openai" | "google" | "cohere"
+  chunk_size: 1000
+  chunk_overlap: 150
+  huggingface_model: "sentence-transformers/all-MiniLM-L6-v2"
+  openai_model: "text-embedding-3-small"
+  google_model: "models/gemini-embedding-001"
+  cohere_model: "embed-english-v3.0"
+
+vector_store:
+  provider: "chroma"
+  persist_directory: "data/vector_store"
+  collection_name: "document_portal_kb"
+
+ingestion:
+  supported_formats:
+    - pdf
+    - docx
+    - txt
+    - md
+    - csv
+    - xlsx
+    - json
+  max_file_size_mb: 50
+
+cache:
+  type: "in_memory"     # LangChain InMemoryCache
+  enabled: true
+
+image_captioning:
+  enabled: true
+  use_cache: true       # Enable smart caching to reduce API calls 50-90%
+  provider: "google_gemini"
+  model: "gemini-flash-latest"
+  cache_type: "md5_hash"  # Use MD5 hash of image content for dedup
+
+logging:
+  level: "INFO"
+  log_dir: "logs"

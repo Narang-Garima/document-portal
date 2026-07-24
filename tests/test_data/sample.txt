@@ -1,0 +1,7 @@
+This is a sample plain text file for testing the text loader.
+
+It has multiple paragraphs, just like a real document would.
+This paragraph talks about student performance trends across grades.
+
+Attendance rates tend to drop after the first three months of enrollment,
+which is a key churn signal worth tracking.

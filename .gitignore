@@ -1,0 +1,34 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+docs/
+
+# Virtual environments
+.venv/
+venv/
+
+# Runtime data
+logs/
+data/*
+
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Authentication database
+data/auth.db
+data/auth.db-*
+credentials/

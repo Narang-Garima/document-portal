@@ -1,0 +1,36 @@
+{
+  "project": "ShopBuddy",
+  "tech_stack": [
+    "LangGraph",
+    "FastAPI",
+    "AWS EKS",
+    "Groq",
+    "RAGAS",
+    "Kubernetes",
+    "MCP"
+  ],
+  "metrics": {
+    "context_precision": 0.85,
+    "response_time_improvement": "40%",
+    "uptime": "99%",
+    "cost_reduction": "10x"
+  },
+  "sections": {
+    "30_second_pitch": "Agentic RAG assistant for e-commerce using LangGraph orchestration.",
+    "1_minute_pitch": [
+      "Problem",
+      "Architecture",
+      "Key decision",
+      "Result"
+    ],
+    "deep_dive_topics": [
+      "Why LangGraph",
+      "Retrieval Design",
+      "RAGAS Evaluation",
+      "Groq vs GPT-4",
+      "Kubernetes/EKS",
+      "MCP Usage",
+      "Bug Story"
+    ]
+  }
+}
