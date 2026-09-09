@@ -1,10 +1,10 @@
-import sys
-import os
 import json
+import os
 import pickle
+import sys
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from exception import DocumentPortalException
 from logger import get_logger
@@ -19,8 +19,8 @@ _embedding_cache = {}
 
 _METADATA_FILENAME = "embedding_metadata.json"
 _DOCUMENTS_FILENAME = "documents.pkl"  # raw chunks, needed to rebuild BM25 (keyword)
-                                          # search -- BM25 can't be reconstructed from
-                                          # vectors alone, it needs the actual token text
+# search -- BM25 can't be reconstructed from
+# vectors alone, it needs the actual token text
 
 
 def _documents_path(persist_directory: str) -> str:
@@ -31,7 +31,26 @@ def _metadata_path(persist_directory: str) -> str:
     return os.path.join(persist_directory, _METADATA_FILENAME)
 
 
-def _save_embedding_metadata(persist_directory: str, provider: str, model_name: str, recommended_vector_weight: float = 0.5):
+def _vector_store_provider(config: dict) -> str:
+    """Resolve the configured vector backend without exposing secrets in YAML."""
+    provider = os.getenv(
+        "VECTOR_STORE_PROVIDER", config["vector_store"].get("provider", "chroma")
+    ).lower()
+    if provider not in {"chroma", "pinecone"}:
+        raise DocumentPortalException(
+            f"Unsupported vector store provider: '{provider}' (supported: chroma, pinecone)",
+            sys,
+        )
+    return provider
+
+
+def _save_embedding_metadata(
+    persist_directory: str,
+    provider: str,
+    model_name: str,
+    recommended_vector_weight: float = 0.5,
+    vector_store_provider: str = "chroma",
+):
     """
     Records which embedding provider/model was used to build a vector
     store, as a small sidecar JSON file next to the persisted Chroma data.
@@ -45,7 +64,12 @@ def _save_embedding_metadata(persist_directory: str, provider: str, model_name: 
     os.makedirs(persist_directory, exist_ok=True)
     with open(_metadata_path(persist_directory), "w") as f:
         json.dump(
-            {"provider": provider, "model_name": model_name, "recommended_vector_weight": recommended_vector_weight},
+            {
+                "provider": provider,
+                "model_name": model_name,
+                "recommended_vector_weight": recommended_vector_weight,
+                "vector_store_provider": vector_store_provider,
+            },
             f,
         )
     log.info(
@@ -61,7 +85,7 @@ def _load_embedding_metadata(persist_directory: str):
     path = _metadata_path(persist_directory)
     if not os.path.exists(path):
         return None
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 
@@ -87,8 +111,10 @@ def get_recommended_vector_weight(default: float = 0.5) -> float:
 # code (get_embedding_model, build_vector_store, etc.) never needs to
 # know the list of providers, it just looks up whatever's registered.
 
+
 def _build_huggingface(model_name, api_key, config):
     from langchain_huggingface import HuggingFaceEmbeddings
+
     model_name = model_name or config["embedding"]["huggingface_model"]
     log.info(f"Loading local HuggingFace embedding model: {model_name}")
     return HuggingFaceEmbeddings(model_name=model_name)
@@ -96,8 +122,11 @@ def _build_huggingface(model_name, api_key, config):
 
 def _build_openai(model_name, api_key, config):
     from langchain_openai import OpenAIEmbeddings
+
     if not api_key:
-        raise DocumentPortalException("OpenAI embeddings require an api_key -- none was provided", sys)
+        raise DocumentPortalException(
+            "OpenAI embeddings require an api_key -- none was provided", sys
+        )
     model_name = model_name or config["embedding"]["openai_model"]
     log.info(f"Using OpenAI embedding model: {model_name}")
     return OpenAIEmbeddings(model=model_name, api_key=api_key)
@@ -105,8 +134,11 @@ def _build_openai(model_name, api_key, config):
 
 def _build_google(model_name, api_key, config):
     from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
     if not api_key:
-        raise DocumentPortalException("Google embeddings require an api_key -- none was provided", sys)
+        raise DocumentPortalException(
+            "Google embeddings require an api_key -- none was provided", sys
+        )
     model_name = model_name or config["embedding"]["google_model"]
     log.info(f"Using Google embedding model: {model_name}")
     return GoogleGenerativeAIEmbeddings(model=model_name, google_api_key=api_key)
@@ -114,8 +146,11 @@ def _build_google(model_name, api_key, config):
 
 def _build_cohere(model_name, api_key, config):
     from langchain_cohere import CohereEmbeddings
+
     if not api_key:
-        raise DocumentPortalException("Cohere embeddings require an api_key -- none was provided", sys)
+        raise DocumentPortalException(
+            "Cohere embeddings require an api_key -- none was provided", sys
+        )
     model_name = model_name or config["embedding"].get("cohere_model", "embed-english-v3.0")
     log.info(f"Using Cohere embedding model: {model_name}")
     return CohereEmbeddings(model=model_name, cohere_api_key=api_key)
@@ -158,7 +193,8 @@ def get_embedding_model(provider: str = None, model_name: str = None, api_key: s
     if provider not in _PROVIDER_REGISTRY:
         raise DocumentPortalException(
             f"Unsupported embedding provider: '{provider}' "
-            f"(supported: {list(_PROVIDER_REGISTRY.keys())})", sys
+            f"(supported: {list(_PROVIDER_REGISTRY.keys())})",
+            sys,
         )
 
     try:
@@ -170,7 +206,9 @@ def get_embedding_model(provider: str = None, model_name: str = None, api_key: s
     except DocumentPortalException:
         raise
     except Exception as e:
-        raise DocumentPortalException(f"Failed to load embedding model for provider '{provider}'", sys) from e
+        raise DocumentPortalException(
+            f"Failed to load embedding model for provider '{provider}'", sys
+        ) from e
 
 
 def _compute_recommended_vector_weight(chunked_docs: list) -> float:
@@ -254,6 +292,40 @@ def chunk_documents(docs: list):
         raise DocumentPortalException("Failed to chunk documents", sys) from e
 
 
+def _pinecone_vector_store(embeddings, config: dict):
+    """Connect to an existing Pinecone index using the selected embedding model."""
+    api_key = os.getenv("PINECONE_API_KEY")
+    index_name = os.getenv(
+        "PINECONE_INDEX_NAME", config["vector_store"].get("pinecone_index_name", "document-portal")
+    )
+    namespace = os.getenv(
+        "PINECONE_NAMESPACE", config["vector_store"].get("pinecone_namespace", "default")
+    )
+    if not api_key:
+        raise DocumentPortalException("Pinecone requires PINECONE_API_KEY in the environment.", sys)
+
+    try:
+        from langchain_pinecone import PineconeVectorStore
+        from pinecone import Pinecone
+
+        client = Pinecone(api_key=api_key)
+        if not client.has_index(index_name):
+            raise DocumentPortalException(
+                f"Pinecone index '{index_name}' does not exist. Create it with a dimension "
+                "matching the configured embedding model before starting the portal.",
+                sys,
+            )
+        return PineconeVectorStore(
+            index=client.Index(index_name),
+            embedding=embeddings,
+            namespace=namespace,
+        )
+    except ImportError as exc:
+        raise DocumentPortalException(
+            'Pinecone support is not installed. Run: pip install -e ".[pinecone]"', sys
+        ) from exc
+
+
 def build_vector_store(
     chunked_docs: list,
     persist: bool = True,
@@ -288,12 +360,17 @@ def build_vector_store(
             provider=embedding_provider, model_name=embedding_model_name, api_key=embedding_api_key
         )
 
-        vector_store = Chroma.from_documents(
-            documents=chunked_docs,
-            embedding=embeddings,
-            collection_name=collection_name,
-            persist_directory=persist_directory,
-        )
+        vector_provider = _vector_store_provider(config)
+        if vector_provider == "pinecone":
+            vector_store = _pinecone_vector_store(embeddings, config)
+            vector_store.add_documents(chunked_docs)
+        else:
+            vector_store = Chroma.from_documents(
+                documents=chunked_docs,
+                embedding=embeddings,
+                collection_name=collection_name,
+                persist_directory=persist_directory,
+            )
 
         if persist and persist_directory:
             # Record which provider/model built this store, so a later
@@ -301,9 +378,17 @@ def build_vector_store(
             # silently returning bad similarity scores. Also compute and
             # save a recommended vector_weight for hybrid search, so
             # retrieval can auto-adapt to this document's content style.
-            resolved_model_name = embedding_model_name or config["embedding"].get(f"{config_provider}_model")
+            resolved_model_name = embedding_model_name or config["embedding"].get(
+                f"{config_provider}_model"
+            )
             recommended_weight = _compute_recommended_vector_weight(chunked_docs)
-            _save_embedding_metadata(persist_directory, config_provider, resolved_model_name, recommended_weight)
+            _save_embedding_metadata(
+                persist_directory,
+                config_provider,
+                resolved_model_name,
+                recommended_weight,
+                vector_store_provider=vector_provider,
+            )
 
             # Also persist the raw chunks themselves -- needed to build a
             # BM25 (keyword) index later, since BM25 works on actual text,
@@ -332,7 +417,9 @@ def build_vector_store(
         raise DocumentPortalException("Failed to build vector store", sys) from e
 
 
-def load_vector_store(embedding_provider: str = None, embedding_model_name: str = None, embedding_api_key: str = None):
+def load_vector_store(
+    embedding_provider: str = None, embedding_model_name: str = None, embedding_api_key: str = None
+):
     """
     Loads an existing persisted vector store from disk. The SAME embedding
     provider/model used to build the store must be used here -- vectors
@@ -364,7 +451,8 @@ def load_vector_store(embedding_provider: str = None, embedding_model_name: str 
                     f"provider='{embedding_provider}'. Querying with a different embedding "
                     f"model than the one used to build the index produces meaningless "
                     f"similarity scores. Use provider='{saved_provider}' to query this store, "
-                    f"or rebuild the index with your new provider.", sys
+                    f"or rebuild the index with your new provider.",
+                    sys,
                 )
 
             # No explicit provider given -- use what actually built the store
@@ -376,11 +464,24 @@ def load_vector_store(embedding_provider: str = None, embedding_model_name: str 
             provider=embedding_provider, model_name=embedding_model_name, api_key=embedding_api_key
         )
 
-        vector_store = Chroma(
-            collection_name=collection_name,
-            embedding_function=embeddings,
-            persist_directory=persist_directory,
-        )
+        vector_provider = _vector_store_provider(config)
+        if saved_metadata and saved_metadata.get("vector_store_provider"):
+            recorded_provider = saved_metadata["vector_store_provider"]
+            if vector_provider != recorded_provider:
+                raise DocumentPortalException(
+                    f"Vector store mismatch: metadata was created for '{recorded_provider}', "
+                    f"but the application is configured for '{vector_provider}'.",
+                    sys,
+                )
+
+        if vector_provider == "pinecone":
+            vector_store = _pinecone_vector_store(embeddings, config)
+        else:
+            vector_store = Chroma(
+                collection_name=collection_name,
+                embedding_function=embeddings,
+                persist_directory=persist_directory,
+            )
         return vector_store
 
     except DocumentPortalException:

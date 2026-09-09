@@ -1,12 +1,14 @@
-from langchain_core.globals import set_llm_cache
+import sys
+
 from langchain_core.caches import InMemoryCache
+from langchain_core.globals import set_llm_cache
 from langchain_core.prompts import ChatPromptTemplate
 
-import sys
 from exception import DocumentPortalException
 from logger import get_logger
-from src.document_chat.search import retrieve_context
 from src.document_chat.llm_provider import get_llm
+from src.document_chat.search import retrieve_context
+from utils.config_loader import load_config
 
 log = get_logger(__name__)
 
@@ -17,8 +19,6 @@ log = get_logger(__name__)
 # call. This matters for RAG specifically because repeated or near-
 # identical questions (common in demos/testing) would otherwise burn
 # API cost and latency on every repeat.
-from utils.config_loader import load_config
-
 if load_config().get("cache", {}).get("enabled", True):
     set_llm_cache(InMemoryCache())
     log.info("LangChain in-memory cache enabled globally")
@@ -68,7 +68,8 @@ def answer_question(
         log.info(f"Answering question: {query[:80]}")
 
         retrieved_docs = retrieve_context(
-            query, k=k,
+            query,
+            k=k,
             embedding_provider=embedding_provider,
             embedding_model_name=embedding_model_name,
             embedding_api_key=embedding_api_key,
@@ -97,7 +98,11 @@ def answer_question(
         return {
             "answer": answer_text,
             "sources": [
-                {"type": d.metadata.get("type"), "content": d.page_content[:200], "metadata": d.metadata}
+                {
+                    "type": d.metadata.get("type"),
+                    "content": d.page_content[:200],
+                    "metadata": d.metadata,
+                }
                 for d in retrieved_docs
             ],
         }

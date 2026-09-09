@@ -1,5 +1,6 @@
 import os
 import sys
+
 import yaml
 
 from exception.document_portal_exception import DocumentPortalException
@@ -24,7 +25,7 @@ def load_config(config_path: str = "config/config.yaml") -> dict:
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file not found at {config_path}")
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         log.info("Config loaded successfully")

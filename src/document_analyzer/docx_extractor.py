@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 from docx import Document as DocxDocument
 from langchain_core.documents import Document
@@ -29,13 +29,14 @@ def extract_docx_tables(file_path: str):
             if len(table.rows) < 1:
                 continue
 
-            headers = [cell.text.strip() or f"col_{i}" for i, cell in enumerate(table.rows[0].cells)]
+            headers = [
+                cell.text.strip() or f"col_{i}" for i, cell in enumerate(table.rows[0].cells)
+            ]
             data_rows = table.rows[1:] if len(table.rows) > 1 else []
 
             for row_idx, row in enumerate(data_rows):
                 row_text = "\n".join(
-                    f"{headers[i]}: {cell.text.strip()}"
-                    for i, cell in enumerate(row.cells)
+                    f"{headers[i]}: {cell.text.strip()}" for i, cell in enumerate(row.cells)
                 )
                 if not row_text.strip():
                     continue
@@ -58,7 +59,9 @@ def extract_docx_tables(file_path: str):
     except DocumentPortalException:
         raise
     except Exception as e:
-        raise DocumentPortalException(f"Failed to extract tables from DOCX: {file_path}", sys) from e
+        raise DocumentPortalException(
+            f"Failed to extract tables from DOCX: {file_path}", sys
+        ) from e
 
 
 def extract_docx_images(file_path: str, caption: bool = True):
@@ -76,8 +79,7 @@ def extract_docx_images(file_path: str, caption: bool = True):
         docs = []
 
         image_parts = [
-            part for part in docx_doc.part.related_parts.values()
-            if "image" in part.content_type
+            part for part in docx_doc.part.related_parts.values() if "image" in part.content_type
         ]
 
         for img_idx, part in enumerate(image_parts):
@@ -107,4 +109,6 @@ def extract_docx_images(file_path: str, caption: bool = True):
     except DocumentPortalException:
         raise
     except Exception as e:
-        raise DocumentPortalException(f"Failed to extract images from DOCX: {file_path}", sys) from e
+        raise DocumentPortalException(
+            f"Failed to extract images from DOCX: {file_path}", sys
+        ) from e

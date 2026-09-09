@@ -23,9 +23,11 @@ embedding:
   cohere_model: "embed-english-v3.0"
 
 vector_store:
-  provider: "chroma"
+  provider: "chroma"            # "chroma" | "pinecone"
   persist_directory: "data/vector_store"
   collection_name: "document_portal_kb"
+  pinecone_index_name: "document-portal"
+  pinecone_namespace: "default"
 
 ingestion:
   supported_formats:

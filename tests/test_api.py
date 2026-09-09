@@ -12,6 +12,13 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
+def test_protected_endpoint_rejects_unauthenticated_request(monkeypatch):
+    monkeypatch.setattr(main, "AUTH_ENABLED", True)
+    response = client.post("/ask", json={"question": "What is it?"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Login required."
+
+
 def test_home_page_loads():
     response = client.get("/")
     assert response.status_code == 200
@@ -19,7 +26,9 @@ def test_home_page_loads():
 
 
 def test_upload_rejects_unsupported_file():
-    response = client.post("/upload", files={"file": ("bad.exe", b"bad", "application/octet-stream")})
+    response = client.post(
+        "/upload", files={"file": ("bad.exe", b"bad", "application/octet-stream")}
+    )
     assert response.status_code == 415
 
 
@@ -44,7 +53,9 @@ def test_upload_processes_valid_file_without_index(monkeypatch):
 
 
 def test_ask_endpoint_uses_rag(monkeypatch):
-    monkeypatch.setattr(main, "answer_question", lambda *args, **kwargs: {"answer": "ok", "sources": []})
+    monkeypatch.setattr(
+        main, "answer_question", lambda *args, **kwargs: {"answer": "ok", "sources": []}
+    )
     response = client.post("/ask", json={"question": "What is it?", "k": 4, "use_hybrid": True})
     assert response.status_code == 200
     assert response.json()["answer"] == "ok"

@@ -17,11 +17,6 @@ load_dotenv(BASE_DIR / ".env")
 
 from exception import DocumentPortalException
 from logger import get_logger
-from src.document_chat.indexer import build_vector_store, chunk_documents
-from src.document_chat.hybrid_retrieval import clear_hybrid_cache
-from src.document_chat.retrieval import answer_question
-from src.document_compare import compare_documents
-from src.document_ingestion import process_document, supported_extensions
 from src.auth_store import (
     add_user,
     create_otp,
@@ -32,26 +27,43 @@ from src.auth_store import (
     set_user_active,
     verify_otp,
 )
+from src.document_chat.hybrid_retrieval import clear_hybrid_cache
+from src.document_chat.indexer import build_vector_store, chunk_documents
+from src.document_chat.retrieval import answer_question
+from src.document_compare import compare_documents
+from src.document_ingestion import process_document, supported_extensions
 from utils.config_loader import load_config
 
 log = get_logger(__name__)
 config = load_config()
 MAX_FILE_SIZE = int(config["ingestion"].get("max_file_size_mb", 50)) * 1024 * 1024
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+SESSION_SECRET = os.getenv("SESSION_SECRET", "development-only-change-me")
+if AUTH_ENABLED and SESSION_SECRET == "development-only-change-me":
+    raise RuntimeError("Set a strong SESSION_SECRET when AUTH_ENABLED=true.")
 initialize_auth_store()
 
 
 EVALUATION_CASES = [
     {"question": "What is the main subject of the indexed document?", "focus": "Answer relevancy"},
-    {"question": "Summarize the most important facts in the indexed document.", "focus": "Answer relevancy + faithfulness"},
+    {
+        "question": "Summarize the most important facts in the indexed document.",
+        "focus": "Answer relevancy + faithfulness",
+    },
     {"question": "Which technologies are mentioned?", "focus": "Faithfulness"},
     {"question": "What architecture or workflow is described?", "focus": "Contextual relevancy"},
     {"question": "How is the system deployed?", "focus": "Faithfulness"},
     {"question": "What evaluation tools or metrics are reported?", "focus": "Contextual relevancy"},
     {"question": "What are the key entities in the document?", "focus": "Answer relevancy"},
     {"question": "What limitations or future improvements are described?", "focus": "Faithfulness"},
-    {"question": "Which facts are unique or especially important?", "focus": "Contextual relevancy"},
-    {"question": "What information is not available in the document?", "focus": "Hallucination resistance"},
+    {
+        "question": "Which facts are unique or especially important?",
+        "focus": "Contextual relevancy",
+    },
+    {
+        "question": "What information is not available in the document?",
+        "focus": "Hallucination resistance",
+    },
 ]
 
 
@@ -70,7 +82,7 @@ app = FastAPI(
 )
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", "development-only-change-me"),
+    secret_key=SESSION_SECRET,
     same_site="lax",
     https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
 )
@@ -136,7 +148,7 @@ async def home(request: Request):
             "auth_enabled": AUTH_ENABLED,
             "role": request.session.get("role", "user"),
         },
-)
+    )
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -149,7 +161,7 @@ async def login_page(request: Request):
             "message": None,
             "email": request.session.get("pending_email", ""),
             "otp_requested": bool(request.session.get("pending_email")),
-            "otp_debug": os.getenv("OTP_DEBUG", "true").lower() == "true",
+            "otp_debug": os.getenv("OTP_DEBUG", "false").lower() == "true",
         },
     )
 
@@ -165,7 +177,7 @@ async def request_login_otp(request: Request, email: str = Form(...)):
             "message": "A one-time code was sent to your email.",
             "email": normalized,
             "otp_requested": True,
-            "otp_debug": os.getenv("OTP_DEBUG", "true").lower() == "true",
+            "otp_debug": os.getenv("OTP_DEBUG", "false").lower() == "true",
         }
         if context["otp_debug"]:
             context["message"] = f"Development OTP: {otp}"
@@ -179,7 +191,7 @@ async def request_login_otp(request: Request, email: str = Form(...)):
                 "message": None,
                 "email": normalized,
                 "otp_requested": False,
-                "otp_debug": os.getenv("OTP_DEBUG", "true").lower() == "true",
+                "otp_debug": os.getenv("OTP_DEBUG", "false").lower() == "true",
             },
             status_code=400,
         )
@@ -202,17 +214,23 @@ async def verify_login_otp(request: Request, email: str = Form(...), otp: str = 
             "message": None,
             "email": normalize_email(email),
             "otp_requested": True,
-            "otp_debug": os.getenv("OTP_DEBUG", "true").lower() == "true",
+            "otp_debug": os.getenv("OTP_DEBUG", "false").lower() == "true",
         },
         status_code=401,
     )
 
 
 @app.post("/login", response_class=HTMLResponse)
-async def legacy_admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
+async def legacy_admin_login(
+    request: Request, username: str = Form(...), password: str = Form(...)
+):
     """Development-only admin/admin fallback. Disable with ENABLE_DEV_ADMIN_LOGIN=false."""
-    enabled = os.getenv("ENABLE_DEV_ADMIN_LOGIN", "true").lower() == "true"
-    if enabled and username == os.getenv("DEV_ADMIN_USERNAME", "admin") and password == os.getenv("DEV_ADMIN_PASSWORD", "admin"):
+    enabled = os.getenv("ENABLE_DEV_ADMIN_LOGIN", "false").lower() == "true"
+    if (
+        enabled
+        and username == os.getenv("DEV_ADMIN_USERNAME", "admin")
+        and password == os.getenv("DEV_ADMIN_PASSWORD", "admin")
+    ):
         admin_email = normalize_email("admin")
         user = get_user(admin_email)
         request.session["authenticated"] = True
@@ -227,7 +245,7 @@ async def legacy_admin_login(request: Request, username: str = Form(...), passwo
             "message": None,
             "email": "",
             "otp_requested": False,
-            "otp_debug": os.getenv("OTP_DEBUG", "true").lower() == "true",
+            "otp_debug": os.getenv("OTP_DEBUG", "false").lower() == "true",
         },
         status_code=401,
     )
@@ -316,7 +334,9 @@ async def upload_multiple_documents(
                 os.remove(temp_path)
 
     if not all_chunks:
-        raise HTTPException(status_code=422, detail={"message": "No files were indexed.", "failures": failed_files})
+        raise HTTPException(
+            status_code=422, detail={"message": "No files were indexed.", "failures": failed_files}
+        )
 
     # Index all chunks in one operation so Chroma and the BM25 document cache
     # are synchronized across the complete multi-document batch.
@@ -385,7 +405,9 @@ async def create_portal_user(request: Request, email: str = Form(...), role: str
 
 
 @app.post("/admin/users/status")
-async def update_portal_user_status(request: Request, email: str = Form(...), active: bool = Form(...)):
+async def update_portal_user_status(
+    request: Request, email: str = Form(...), active: bool = Form(...)
+):
     _require_login(request)
     if request.session.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Administrator access required.")

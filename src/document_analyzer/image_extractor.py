@@ -1,7 +1,5 @@
-import sys
 import hashlib
 
-from exception import DocumentPortalException
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -19,13 +17,9 @@ def _get_image_hash(image_bytes: bytes) -> str:
 def get_cache_stats() -> dict:
     """Return cache performance statistics"""
     total_requests = _CACHE_STATS["hits"] + _CACHE_STATS["misses"]
-    hit_rate = (
-        (_CACHE_STATS["hits"] / total_requests * 100)
-        if total_requests > 0
-        else 0
-    )
+    hit_rate = (_CACHE_STATS["hits"] / total_requests * 100) if total_requests > 0 else 0
     api_calls_saved = _CACHE_STATS["hits"]
-    
+
     return {
         "cache_hits": _CACHE_STATS["hits"],
         "cache_misses": _CACHE_STATS["misses"],
@@ -60,21 +54,21 @@ def caption_image(image_bytes: bytes, image_ext: str) -> str:
 
     Requires GOOGLE_API_KEY to be set as an environment variable.
     Get a free key at: https://aistudio.google.com/apikey
-    
+
     Includes intelligent caching: identical images are cached to avoid
     redundant API calls (reduces costs by 50-90% on duplicate uploads).
     """
     # Check cache first
     img_hash = _get_image_hash(image_bytes)
-    
+
     if img_hash in _CAPTION_CACHE:
         _CACHE_STATS["hits"] += 1
         log.debug(f"Cache HIT for image {img_hash[:8]}...")
         return _CAPTION_CACHE[img_hash]
-    
+
     _CACHE_STATS["misses"] += 1
     log.debug(f"Cache MISS for image {img_hash[:8]}... (calling API)")
-    
+
     try:
         from google import genai
         from google.genai import types
@@ -94,11 +88,11 @@ def caption_image(image_bytes: bytes, image_ext: str) -> str:
             ],
         )
         caption = response.text
-        
+
         # Store in cache for future use
         _CAPTION_CACHE[img_hash] = caption
         log.debug(f"Cached caption (total cached: {len(_CAPTION_CACHE)})")
-        
+
         return caption
 
     except Exception as e:

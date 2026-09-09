@@ -16,10 +16,10 @@ log = get_logger(__name__)
 _bm25_cache: dict[tuple[str, int], BM25Retriever] = {}
 
 
-
 def clear_hybrid_cache() -> None:
     """Invalidate cached BM25 retrievers after indexing or resetting documents."""
     _bm25_cache.clear()
+
 
 def _load_bm25_retriever(k: int) -> BM25Retriever:
     config = load_config()

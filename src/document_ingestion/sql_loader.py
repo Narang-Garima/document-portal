@@ -1,7 +1,7 @@
 import sys
 
-from sqlalchemy import create_engine, text
 from langchain_core.documents import Document
+from sqlalchemy import create_engine, text
 
 from exception import DocumentPortalException
 from logger import get_logger
@@ -36,7 +36,7 @@ def load_sql(connection_string: str, query: str, source_label: str = "sql_db"):
     if not query or not query.strip():
         log.error("No query provided")
         raise DocumentPortalException("No query provided", sys)
-    
+
     try:
         log.info(f"Connecting to database for query: {query[:80]}...")
         engine = create_engine(connection_string)
@@ -66,6 +66,4 @@ def load_sql(connection_string: str, query: str, source_label: str = "sql_db"):
     except DocumentPortalException:
         raise
     except Exception as e:
-        raise DocumentPortalException(
-            f"Failed to load from SQL database: {query}", sys
-        ) from e
+        raise DocumentPortalException(f"Failed to load from SQL database: {query}", sys) from e

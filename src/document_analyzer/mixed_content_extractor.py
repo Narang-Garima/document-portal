@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 import fitz  # PyMuPDF
 import pdfplumber
@@ -12,7 +12,9 @@ from src.document_analyzer.image_extractor import caption_image
 log = get_logger(__name__)
 
 
-def _extract_structural_tables_for_page(plumber_page, page_num: int, file_path: str, assume_header: bool = True):
+def _extract_structural_tables_for_page(
+    plumber_page, page_num: int, file_path: str, assume_header: bool = True
+):
     docs = []
     tables = plumber_page.extract_tables()
 
@@ -37,8 +39,12 @@ def _extract_structural_tables_for_page(plumber_page, page_num: int, file_path: 
                 Document(
                     page_content=row_text,
                     metadata={
-                        "source": file_path, "type": "table_row", "page": page_num + 1,
-                        "table_index": table_idx, "row_index": row_idx, "extraction_method": "structural",
+                        "source": file_path,
+                        "type": "table_row",
+                        "page": page_num + 1,
+                        "table_index": table_idx,
+                        "row_index": row_idx,
+                        "extraction_method": "structural",
                     },
                 )
             )
@@ -55,14 +61,22 @@ def _extract_raster_images_for_page(fitz_page, pdf, page_num: int, file_path: st
         image_bytes = base_image["image"]
         image_ext = base_image["ext"]
 
-        caption_text = caption_image(image_bytes, image_ext) if caption else f"[Uncaptioned image, page {page_num + 1}]"
+        caption_text = (
+            caption_image(image_bytes, image_ext)
+            if caption
+            else f"[Uncaptioned image, page {page_num + 1}]"
+        )
 
         docs.append(
             Document(
                 page_content=caption_text,
                 metadata={
-                    "source": file_path, "type": "image", "page": page_num + 1,
-                    "image_index": img_idx, "image_format": image_ext, "extraction_method": "structural",
+                    "source": file_path,
+                    "type": "image",
+                    "page": page_num + 1,
+                    "image_index": img_idx,
+                    "image_format": image_ext,
+                    "extraction_method": "structural",
                 },
             )
         )
@@ -76,7 +90,9 @@ def _page_has_vector_content(fitz_page) -> bool:
 
 def _vision_fallback_for_page(fitz_page, page_num: int, file_path: str):
     try:
-        log.info(f"Structural extraction found nothing on page {page_num + 1}, trying vision fallback")
+        log.info(
+            f"Structural extraction found nothing on page {page_num + 1}, trying vision fallback"
+        )
         pix = fitz_page.get_pixmap(matrix=fitz.Matrix(2, 2))
         image_bytes = pix.tobytes("png")
 
@@ -105,8 +121,10 @@ def _vision_fallback_for_page(fitz_page, page_num: int, file_path: str):
             Document(
                 page_content=text,
                 metadata={
-                    "source": file_path, "type": "page_render_fallback",
-                    "page": page_num + 1, "extraction_method": "vision_fallback",
+                    "source": file_path,
+                    "type": "page_render_fallback",
+                    "page": page_num + 1,
+                    "extraction_method": "vision_fallback",
                 },
             )
         ]
@@ -115,7 +133,12 @@ def _vision_fallback_for_page(fitz_page, page_num: int, file_path: str):
         return []
 
 
-def extract_visual_content(file_path: str, extraction_level: str = "thorough", caption: bool = True, assume_header: bool = True):
+def extract_visual_content(
+    file_path: str,
+    extraction_level: str = "thorough",
+    caption: bool = True,
+    assume_header: bool = True,
+):
     if extraction_level not in ("fast", "thorough"):
         raise DocumentPortalException(
             f"Invalid extraction_level: {extraction_level} (must be 'fast' or 'thorough')", sys
@@ -135,8 +158,12 @@ def extract_visual_content(file_path: str, extraction_level: str = "thorough", c
                 fitz_page = pdf[page_num]
                 plumber_page = plumber_pdf.pages[page_num]
 
-                table_docs = _extract_structural_tables_for_page(plumber_page, page_num, file_path, assume_header)
-                image_docs = _extract_raster_images_for_page(fitz_page, pdf, page_num, file_path, caption)
+                table_docs = _extract_structural_tables_for_page(
+                    plumber_page, page_num, file_path, assume_header
+                )
+                image_docs = _extract_raster_images_for_page(
+                    fitz_page, pdf, page_num, file_path, caption
+                )
 
                 all_docs.extend(table_docs)
                 all_docs.extend(image_docs)
@@ -156,4 +183,6 @@ def extract_visual_content(file_path: str, extraction_level: str = "thorough", c
     except DocumentPortalException:
         raise
     except Exception as e:
-        raise DocumentPortalException(f"Failed to extract visual content from: {file_path}", sys) from e
+        raise DocumentPortalException(
+            f"Failed to extract visual content from: {file_path}", sys
+        ) from e

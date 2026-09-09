@@ -3,7 +3,6 @@ import sys
 
 
 class DocumentPortalException(Exception):
-
     def __init__(self, error_message: str, error_detail=sys):
 
         self.error_message = error_message
@@ -28,7 +27,4 @@ class DocumentPortalException(Exception):
         super().__init__(self.error_message)
 
     def __str__(self):
-        return (
-            f"Error in [{self.file_name}] at line [{self.line_number}]: "
-            f"{self.error_message}"
-        )
+        return f"Error in [{self.file_name}] at line [{self.line_number}]: {self.error_message}"

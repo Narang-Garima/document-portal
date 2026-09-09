@@ -1,7 +1,7 @@
 from langchain_core.documents import Document
 
-from src.document_chat.indexer import chunk_documents
 from src.document_chat import retrieval
+from src.document_chat.indexer import chunk_documents
 
 
 def test_chunker_preserves_table_rows():

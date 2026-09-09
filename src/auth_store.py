@@ -113,7 +113,9 @@ def add_user(email: str, role: str = "user") -> dict:
 def set_user_active(email: str, active: bool) -> None:
     normalized = normalize_email(email)
     with closing(_connect()) as connection:
-        connection.execute("UPDATE users SET active = ? WHERE email = ?", (1 if active else 0, normalized))
+        connection.execute(
+            "UPDATE users SET active = ? WHERE email = ?", (1 if active else 0, normalized)
+        )
         connection.commit()
 
 
@@ -126,10 +128,12 @@ def _send_otp_email(email: str, otp: str) -> None:
     use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 
     if not smtp_host:
-        if os.getenv("OTP_DEBUG", "true").lower() == "true":
+        if os.getenv("OTP_DEBUG", "false").lower() == "true":
             log.warning("OTP_DEBUG enabled. Login OTP for %s is %s", email, otp)
             return
-        raise RuntimeError("SMTP is not configured. Set SMTP_HOST or enable OTP_DEBUG for local development.")
+        raise RuntimeError(
+            "SMTP is not configured. Set SMTP_HOST or enable OTP_DEBUG for local development."
+        )
 
     message = EmailMessage()
     message["Subject"] = "Your DocumentPortal login code"
@@ -194,6 +198,8 @@ def verify_otp(email: str, otp: str) -> dict | None:
             user = get_user(normalized)
             return dict(user) if user and user["active"] else None
 
-        connection.execute("UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", (row["id"],))
+        connection.execute(
+            "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", (row["id"],)
+        )
         connection.commit()
         return None

@@ -2,8 +2,8 @@ import sys
 
 from exception import DocumentPortalException
 from logger import get_logger
-from src.document_chat.indexer import load_vector_store, get_recommended_vector_weight
 from src.document_chat.hybrid_retrieval import build_hybrid_retriever
+from src.document_chat.indexer import get_recommended_vector_weight, load_vector_store
 
 log = get_logger(__name__)
 
@@ -59,7 +59,9 @@ def retrieve_context(
         )
 
         if use_hybrid:
-            resolved_weight = vector_weight if vector_weight is not None else get_recommended_vector_weight()
+            resolved_weight = (
+                vector_weight if vector_weight is not None else get_recommended_vector_weight()
+            )
             try:
                 retriever = build_hybrid_retriever(vector_store, k=k, vector_weight=resolved_weight)
                 results = retriever.invoke(query)
@@ -69,7 +71,9 @@ def retrieve_context(
                 )
                 return results
             except DocumentPortalException as e:
-                log.warning(f"Hybrid retrieval unavailable, falling back to pure vector search: {e}")
+                log.warning(
+                    f"Hybrid retrieval unavailable, falling back to pure vector search: {e}"
+                )
 
         results = vector_store.similarity_search(query, k=k)
         log.info(f"Retrieved {len(results)} chunks (vector-only) for query: {query[:80]}")

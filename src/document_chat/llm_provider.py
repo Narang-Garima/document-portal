@@ -102,6 +102,4 @@ def get_llm(provider: str = None, model_name: str = None, api_key: str = None):
     except DocumentPortalException:
         raise
     except Exception as exc:
-        raise DocumentPortalException(
-            f"Failed to load LLM for provider '{provider}'", sys
-        ) from exc
+        raise DocumentPortalException(f"Failed to load LLM for provider '{provider}'", sys) from exc
