@@ -157,7 +157,7 @@ sequenceDiagram
 ## Run locally
 
 ```
-git clone <your-repo-url>
+git clone https://github.com/Narang-Garima/document-portal.git
 cd document-portal
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -171,7 +171,9 @@ ANTHROPIC_API_KEY=
 GOOGLE_API_KEY=
 ADMIN_EMAIL=
 SESSION_SECRET=
-OTP_DEBUG=true
+AUTH_ENABLED=false
+ENABLE_DEV_ADMIN_LOGIN=false
+OTP_DEBUG=false
 ```
 
 Run it:
@@ -221,3 +223,4 @@ python scripts/run_deepeval.py
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
