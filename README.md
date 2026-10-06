@@ -8,6 +8,10 @@ Document Portal is a portfolio RAG application for turning mixed-format document
 
 The project focuses on the engineering problems that appear after a basic RAG demo: heterogeneous file formats, tables and images, embedding consistency, exact-term retrieval, provider portability, testability, and transparent limitations.
 
+![Document Portal end-to-end architecture infographic](docs/document-portal-infographic.png)
+
+## Application interface
+
 ![Document Portal application interface](docs/app-screenshot.png)
 
 ## What I built
