@@ -11,7 +11,8 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-docs/
+.deepeval/
+*.log
 
 # Virtual environments
 .venv/

@@ -2,191 +2,139 @@
 
 [![CI](https://github.com/Narang-Garima/document-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/Narang-Garima/document-portal/actions/workflows/ci.yml)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi)](https://fastapi.tiangolo.com/)
 
-Document Portal is a production-oriented RAG system that turns PDFs, Word files, spreadsheets, structured files, and SQL databases into searchable knowledge. It focuses on the difficult parts of document AI: mixed-content extraction, retrieval quality, model portability, evaluation, and authenticated access.
+Document Portal is a portfolio RAG application for turning mixed-format documents into searchable knowledge. It combines document ingestion, mixed-content extraction, hybrid retrieval, grounded question answering, document comparison, optional access control, and an API-backed web interface.
 
-The default local backend is Chroma. An existing Pinecone serverless index can be selected for managed vector storage. Authentication uses SQLite-backed users and one-time codes.
+The project focuses on the engineering problems that appear after a basic RAG demo: heterogeneous file formats, tables and images, embedding consistency, exact-term retrieval, provider portability, testability, and transparent limitations.
 
-## Why Document Portal exists
+![Document Portal application interface](docs/app-screenshot.png)
 
-Most RAG tutorials assume a clean PDF with normal tables and no images. Real documents aren't like that — academic papers have borderless tables and vector-drawn charts, spreadsheets have merged cells, and a lot of useful information lives in a table row or a chart, not a paragraph. I wanted to build something that handled that mess honestly: try the fast, free extraction method first, and only fall back to something expensive (a vision model reading the whole page) when the fast method actually fails — verified against a real academic paper, not just a synthetic test file.
+## What I built
 
-## What it does
-
-- Ingests PDF, DOCX, TXT, MD, CSV, JSON, XLSX, and any SQL database through one entry point
-- Extracts tables and images from PDFs, with a vision-model fallback for borderless tables and vector-drawn charts that structural parsing misses
-- Chunks, embeds, and indexes content in Chroma or Pinecone, tagged by content type (text/table/image)
-- Retrieves using hybrid search (vector + BM25 keyword), auto-weighted per document based on how jargon-heavy the content is
-- Answers questions grounded in retrieved context, with sources shown alongside the answer
-- Supports optional OTP-based login with hashed, expiring, single-use codes and basic roles
-- Includes automated API, ingestion, retrieval, authentication, and evaluation tests
+- A FastAPI application with upload, chat, multi-document chat, comparison, evaluation-status, user-administration, and health endpoints
+- One ingestion entry point for PDF, DOCX, TXT, Markdown, CSV, JSON, and XLSX files
+- A separate SQLAlchemy loader for relational database tables
+- Structural PDF extraction with `pdfplumber` and PyMuPDF, plus an optional Gemini vision fallback for missed visual content
+- Recursive text chunking while preserving table rows and image descriptions as self-contained retrieval units
+- Local Chroma or optional Pinecone vector storage with embedding-provider metadata validation
+- Hybrid retrieval that combines vector search with BM25 using weighted reciprocal-rank fusion
+- Grounded answer generation with the retrieved source chunks returned to the UI
+- SQLite-backed users and hashed, expiring, single-use OTP codes when authentication is enabled
+- Unit and API tests, Ruff checks, pre-commit hooks, Docker packaging, and GitHub Actions
 
 ## Architecture
 
-### High-level system
-
 ```mermaid
-flowchart TD
-    UI[Web UI<br/>HTML / CSS / JS]
-    API[FastAPI<br/>Auth · Upload · Chat API]
-    ING[Document Pipeline<br/>PDF / DOCX / CSV / ...]
-    RET[Retrieval Pipeline<br/>Hybrid Search]
-    CHUNK[Chunk Documents]
-    EMBED[Embedding Models]
-    VEC[(Chroma or Pinecone)]
-    BM25[(BM25 Retriever)]
-    LLM[Prompt + LLM<br/>Answer + Sources]
+flowchart LR
+    U[User] --> UI[Web UI]
+    UI --> API[FastAPI]
 
-    UI <-->|HTTP / JSON| API
-    API -->|Ingestion| ING
-    API -->|Question| RET
+    API --> ING[Document ingestion]
+    ING --> EXT[Text table and image extraction]
+    EXT --> CH[Chunking]
+    CH --> EMB[Embedding provider]
+    EMB --> VS[(Chroma or Pinecone)]
+    CH --> BM[(BM25 corpus)]
 
-    ING -->|Text / Tables / Images| CHUNK
-    CHUNK --> EMBED
-    EMBED --> VEC
+    API --> RET[Hybrid retrieval]
+    RET --> VS
+    RET --> BM
+    RET --> LLM[Configured chat model]
+    LLM --> API
 
-    VEC <--> BM25
-    RET --> VEC
-    RET --> BM25
-    VEC -->|Retrieved Context| LLM
-    BM25 -->|Retrieved Context| LLM
-
-    classDef entry fill:#4C6EF5,stroke:#364FC7,color:#fff
-    classDef process fill:#7048E8,stroke:#5F3DC4,color:#fff
-    classDef storage fill:#F59F00,stroke:#E67700,color:#fff
-    classDef output fill:#37B24D,stroke:#2F9E44,color:#fff
-
-    class UI,API entry
-    class ING,RET,CHUNK,EMBED process
-    class VEC,BM25 storage
-    class LLM output
+    API --> AUTH[(SQLite auth store)]
 ```
 
-### Ingestion pipeline
+### Request flow
 
-```mermaid
-flowchart TD
-    A[Document] --> B{Detect file type}
-
-    B -->|PDF| C[Text extraction]
-    B -->|PDF| D[Table extraction]
-    B -->|PDF| E[Image extraction]
-    E -.->|only if structural<br/>extraction finds nothing| F[Vision fallback]
-
-    B -->|DOCX / TXT / CSV<br/>XLSX / JSON / SQL| G[Native parser]
-
-    C --> H[LangChain Documents]
-    D --> H
-    E --> H
-    F --> H
-    G --> H
-
-    H --> I[Recursive chunking]
-    I --> J[Embedding model]
-    J --> K[(Chroma or Pinecone index)]
-
-    classDef entry fill:#4C6EF5,stroke:#364FC7,color:#fff
-    classDef structural fill:#37B24D,stroke:#2F9E44,color:#fff
-    classDef fallback fill:#E64980,stroke:#C2255C,color:#fff
-    classDef process fill:#7048E8,stroke:#5F3DC4,color:#fff
-    classDef storage fill:#F59F00,stroke:#E67700,color:#fff
-
-    class A entry
-    class B process
-    class C,D,E,G structural
-    class F fallback
-    class H,I,J process
-    class K storage
-```
-
-### Retrieval (RAG)
-
-```mermaid
-flowchart TD
-    A[User Question] --> B[Hybrid Retrieval<br/>Vector + BM25]
-    B --> C[Relevant Chunks]
-    C --> D[Prompt Template]
-    D --> E[LLM]
-    E --> F[Grounded Answer<br/>+ Source Chunks]
-
-    classDef entry fill:#4C6EF5,stroke:#364FC7,color:#fff
-    classDef process fill:#7048E8,stroke:#5F3DC4,color:#fff
-    classDef output fill:#37B24D,stroke:#2F9E44,color:#fff
-
-    class A entry
-    class B,C,D,E process
-    class F output
-```
-
-### Authentication
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as API
-    participant DB as SQLite
-
-    U->>A: Enter email
-    A->>DB: Generate + store hashed OTP
-    A-->>U: OTP sent
-    U->>A: Enter OTP
-    A->>DB: Verify OTP (timing-safe compare)
-    DB-->>A: Valid
-    A-->>U: Session cookie
-    U->>A: Authenticated API requests
-```
+1. A user uploads one or more supported files.
+2. The dispatcher selects the appropriate loader and extracts text and structured content.
+3. The application chunks the content and records its source/type metadata.
+4. The configured embedding model indexes dense vectors in Chroma or an existing Pinecone index.
+5. Raw chunks are retained locally for BM25 keyword retrieval.
+6. Vector and keyword rankings are merged, then passed to the configured chat model.
+7. The API returns the grounded answer and the source chunks used to produce it.
 
 ## Engineering decisions
 
-- **Cascading extraction, not always-vision**: structural methods (pdfplumber, PyMuPDF) run first because they're fast and free. Vision fallback only triggers when structural extraction finds nothing on a page that demonstrably has visual content — avoids paying for an LLM call on every page when most pages don't need it.
-- **Provider registries, not a hardcoded model**: embeddings and chat models are pluggable across Hugging Face, OpenAI, Google, Cohere, and Anthropic. Vector storage can use local Chroma or an existing Pinecone index.
-- **Embedding/vector-store consistency is enforced, not assumed**: querying a store with a different embedding model than the one that built it silently returns meaningless similarity scores. A sidecar metadata file records what built the store and validates against it at query time — fails loudly instead of failing silently.
-- **Hybrid search over pure vector search**: embeddings blur exact terms — IDs, citations, technical jargon — that keyword search catches directly. The balance between the two is auto-tuned per document using a lexical-diversity heuristic, not fixed.
-- **DeepEval gated behind explicit opt-in**: judge-model calls cost real API credits, so the RAG-quality suite doesn't run on every commit — only when deliberately triggered (pre-push locally, or in CI with a configured key).
+### Cascading extraction
 
-## Stack
+Structural extraction runs first because it is faster and does not require a model call. The Gemini vision fallback is optional and is used only when structural parsing misses visual content on a PDF page.
 
-- FastAPI backend with health, upload, chat, comparison, administration, and evaluation endpoints
-- HTML/CSS/JS frontend (no framework)
-- LangChain for chunking, prompts, and caching; Chroma or Pinecone for vectors; BM25 for keyword search
-- pdfplumber and PyMuPDF for structural extraction; Gemini for vision fallback and image captioning
-- SQLite for auth; Chroma persisted to disk for vectors
-- pytest unit/integration tests and an opt-in DeepEval 10-case RAG quality suite
-- GitHub Actions and pre-commit hooks for CI
+### Embedding consistency
 
-## Run locally
+The application records which embedding provider and model created a vector store. Query-time validation rejects a mismatched configuration instead of silently comparing incompatible vectors.
 
+### Hybrid retrieval
+
+Dense retrieval captures semantic similarity, while BM25 preserves exact terminology such as identifiers, citations, and domain-specific terms. The application merges both rankings with weighted reciprocal-rank fusion.
+
+### Provider portability
+
+Provider registries isolate model construction from the retrieval pipeline. The implemented integrations support Hugging Face, OpenAI, Google, and Cohere embeddings, plus Anthropic, OpenAI, and Google chat models.
+
+## Repository structure
+
+```text
+document-portal/
+├── api/                     FastAPI application and routes
+├── config/                  Model, chunking, storage, and app settings
+├── docs/                    Verified screenshot and validation notes
+├── evals/                   Opt-in DeepEval RAG quality suite
+├── scripts/                 Evaluation and vector-store inspection utilities
+├── src/
+│   ├── document_analyzer/   PDF and DOCX mixed-content extraction
+│   ├── document_chat/       Chunking, indexing, retrieval, and generation
+│   ├── document_compare/    Deterministic document comparison
+│   └── document_ingestion/  File and SQL loaders
+├── static/                  Browser JavaScript and CSS
+├── templates/               Jinja UI templates
+├── tests/                   Unit and API tests with local fixtures
+├── Dockerfile
+├── pyproject.toml
+└── README.md
 ```
+
+## Local setup
+
+Python 3.11 is recommended.
+
+```powershell
 git clone https://github.com/Narang-Garima/document-portal.git
 cd document-portal
 python -m venv .venv
 .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -e ".[dev]"
+Copy-Item .env.example .env
 ```
 
-Create `.env` with your keys:
+The UI and health endpoint can start without a model key. Document question answering requires the API key for the chat provider selected by `LLM_PROVIDER` or, when that variable is unset, by `config/config.yaml`. The default embedding provider is the local Hugging Face model.
 
-```
-ANTHROPIC_API_KEY=
-GOOGLE_API_KEY=
-ADMIN_EMAIL=
-SESSION_SECRET=
-AUTH_ENABLED=false
-ENABLE_DEV_ADMIN_LOGIN=false
-OTP_DEBUG=false
-```
+Start the application:
 
-Run it:
-
-```
+```powershell
 uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000.
+Open `http://127.0.0.1:8000`.
 
-### Use Pinecone instead of Chroma
+### Optional authentication
 
-Create a Pinecone index whose dimension matches the configured embedding model. For example, `sentence-transformers/all-MiniLM-L6-v2` produces 384-dimensional embeddings. Install the optional integration and set:
+Authentication is disabled in `.env.example` for the shortest local demo path. To enable it:
+
+```dotenv
+AUTH_ENABLED=true
+SESSION_SECRET=replace-with-a-long-random-secret
+ADMIN_EMAIL=your-email@example.com
+```
+
+Configure SMTP for email delivery. `OTP_DEBUG=true` displays the code for local testing only and should not be used for a deployed environment.
+
+### Optional Pinecone backend
+
+Create an index whose dimension matches the configured embedding model, then install the optional integration:
 
 ```powershell
 pip install -e ".[dev,pinecone]"
@@ -196,31 +144,54 @@ $env:PINECONE_INDEX_NAME="document-portal"
 $env:PINECONE_NAMESPACE="default"
 ```
 
-Pinecone stores the dense vectors. The current hybrid-search implementation still persists raw chunks locally to construct its BM25 index.
+The current hybrid implementation still stores raw chunks locally to construct the BM25 index.
 
-## Validate
+## Validation
 
+```powershell
+python -m pytest -q
+python -m ruff check .
+python -m ruff format --check .
 ```
-pytest tests -v
-```
 
-Run the paid RAG-quality suite (requires `GOOGLE_API_KEY`):
+Latest verified local result on October 5, 2026:
 
-```
+- `36 passed` with Python 3.11.6
+- Ruff lint completed with no findings
+- Ruff formatting check confirmed 38 formatted files
+- `/health` returned HTTP 200 with version `0.1.0`
+- The application home page and static assets loaded successfully
+- A real text document was extracted and indexed into Chroma and the BM25 corpus
+- Hybrid retrieval returned the correct source chunk with an automatically selected vector weight of `0.3`
+
+See [`docs/verification.md`](docs/verification.md) for the exact scope and limitations of this validation.
+
+### Optional DeepEval suite
+
+The repository includes a ten-case DeepEval suite for answer relevancy, faithfulness, and contextual relevancy. It is deliberately opt-in because it calls a paid judge model.
+
+```powershell
+pip install -e ".[dev,eval]"
+$env:RUN_RAG_EVALS="1"
 python scripts/run_deepeval.py
 ```
 
-## Known limitations
+No DeepEval scores are claimed in this README because the paid suite was not executed during the latest local verification.
 
-- Vision fallback for undetected tables/charts is PDF-only — DOCX extraction is structural-only
-- No automatic retry on LLM rate limits — fails gracefully, doesn't auto-retry
-- Hybrid search weighting is a heuristic, not a tuned model
-- Free-tier vector store persistence may be ephemeral on some hosts (Render free tier) — a redeploy can require re-indexing
-- Pinecone hybrid mode still requires shared durable storage for the BM25 chunk corpus in a multi-instance deployment
-- Authentication is optional and disabled unless `AUTH_ENABLED=true`; the development admin fallback must be disabled in production
-- Production deployments should add enterprise identity, document-level authorization, rate limiting, and centralized tracing
+## Current limitations
+
+- Local extraction, Chroma indexing, and hybrid retrieval were verified end to end. Final model generation still requires a valid provider credential; the credentials available during verification were rejected by both configured providers with HTTP 401 responses.
+- Vision fallback is implemented for PDFs; DOCX visual extraction remains structural-only.
+- LLM calls fail cleanly but do not currently implement retry/backoff for rate limits.
+- Hybrid weighting is heuristic rather than learned or benchmark-tuned.
+- Pinecone dense vectors still require shared durable storage for the local BM25 corpus in a multi-instance deployment.
+- Authentication does not replace enterprise identity, document-level authorization, rate limiting, or centralized audit logging.
+- The included Dockerfile and CI workflow are repository assets; this project does not claim a verified production deployment or enterprise-scale load test.
+
+## Project scope
+
+This is a local portfolio implementation. It demonstrates an end-to-end document intelligence workflow and tested application components without claiming production traffic, enterprise scale, or a live cloud deployment.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
+MIT License. See [`LICENSE`](LICENSE).

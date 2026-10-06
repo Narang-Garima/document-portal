@@ -1,6 +1,6 @@
 from langchain_core.documents import Document
 
-from src.document_chat import retrieval
+from src.document_chat import llm_provider, retrieval
 from src.document_chat.indexer import chunk_documents
 
 
@@ -41,3 +41,21 @@ def test_answer_question_returns_sources(monkeypatch):
     result = retrieval.answer_question("Question")
     assert result["answer"] == "A grounded answer"
     assert result["sources"][0]["metadata"]["source"] == "a.txt"
+
+
+def test_llm_provider_can_be_overridden_by_environment(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        llm_provider,
+        "load_config",
+        lambda: {"llm": {"provider": "google", "temperature": 0.2}},
+    )
+    monkeypatch.setitem(
+        llm_provider._LLM_REGISTRY,
+        "openai",
+        lambda model_name, api_key, config: "openai-client",
+    )
+    llm_provider._llm_cache.clear()
+
+    assert llm_provider.get_llm() == "openai-client"

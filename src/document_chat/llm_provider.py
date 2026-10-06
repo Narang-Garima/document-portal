@@ -82,7 +82,7 @@ _LLM_REGISTRY = {
 def get_llm(provider: str = None, model_name: str = None, api_key: str = None):
     """Create and cache the configured chat model."""
     config = load_config()
-    provider = (provider or config["llm"]["provider"]).lower()
+    provider = (provider or os.getenv("LLM_PROVIDER") or config["llm"]["provider"]).lower()
 
     if provider not in _LLM_REGISTRY:
         raise DocumentPortalException(
