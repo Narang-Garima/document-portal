@@ -42,7 +42,7 @@ The provider selection can be overridden per environment with `LLM_PROVIDER`. A 
 
 `docs/app-screenshot.png` was captured from the running local FastAPI application with authentication disabled and no documents indexed. It represents the current repository UI rather than the older design reference that was previously stored in the repository.
 
-`docs/document-portal-infographic.png` is a portfolio architecture summary derived from the verified repository flow. It distinguishes the parallel Chroma and BM25 retrieval paths and lists only the local checks recorded above; it is explanatory artwork rather than additional runtime evidence.
+`docs/document-portal-architecture-v2.png` is a portfolio architecture summary derived from the verified repository flow. It distinguishes the parallel Chroma and BM25 retrieval paths and lists only the local checks recorded above; it is explanatory artwork rather than additional runtime evidence.
 
 ## Not executed in this verification
 
